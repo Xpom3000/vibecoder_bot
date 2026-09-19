@@ -1,21 +1,50 @@
-"""Хранение заявок на бриф.
+"""Хранение заявок на бриф — реальная БД бота (SQLite), как рекомендует
+паспорт для MVP-этапа.
 
-TODO: заменить на подключение к реальной БД, общей с лендингом,
-как только будет известна её схема и доступ. Сейчас — временное
-локальное хранилище в JSON Lines, чтобы заявки не терялись уже сейчас.
+Лендинг сейчас статический HTML/CSS/JS без бэкенда — делить с ним БД
+буквально нечего. Поэтому это отдельная, но настоящая база: данные не
+теряются между перезапусками бота и их легко смотреть/выгружать
+(например, DB Browser for SQLite). Если у лендинга позже появится
+бэкенд — эти же данные можно будет читать напрямую из файла БД или
+перенести на PostgreSQL, схема останется той же.
 """
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 
-LEADS_FILE = Path(__file__).resolve().parent.parent / "data" / "leads.jsonl"
+import aiosqlite
+
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "vibecoder_bot.db"
+
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS leads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    project_type TEXT NOT NULL,
+    task TEXT,
+    contact TEXT NOT NULL,
+    telegram_username TEXT,
+    telegram_user_id INTEGER,
+    source TEXT NOT NULL DEFAULT 'bot',
+    status TEXT NOT NULL DEFAULT 'new',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+INSERT_LEAD_SQL = """
+INSERT INTO leads (name, project_type, task, contact, telegram_username, telegram_user_id)
+VALUES (:name, :project_type, :task, :contact, :telegram_username, :telegram_user_id)
+"""
 
 
-def save_lead(lead: dict) -> None:
-    """Добавляет одну заявку в конец файла (одна заявка — одна строка JSON)."""
-    LEADS_FILE.parent.mkdir(parents=True, exist_ok=True)
+async def init_db() -> None:
+    """Создаёт файл БД и таблицу, если их ещё нет. Вызывается один раз при старте бота."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(CREATE_TABLE_SQL)
+        await db.commit()
 
-    record = {**lead, "created_at": datetime.now(timezone.utc).isoformat()}
 
-    with LEADS_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+async def save_lead(lead: dict) -> None:
+    """Сохраняет одну заявку на бриф."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(INSERT_LEAD_SQL, lead)
+        await db.commit()

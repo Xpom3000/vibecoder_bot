@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from config import ADMIN_CHAT_ID
+from services.notify import notify_admin
 from data.portfolio import SERVICES
 from keyboards.inline import brief_cancel_kb, brief_project_type_kb, main_menu
 from services.db import save_lead
@@ -95,7 +96,7 @@ async def process_contact(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
 
-    save_lead(
+    await save_lead(
         {
             "name": data["name"],
             "project_type": data["project_type"],
@@ -106,11 +107,8 @@ async def process_contact(message: Message, state: FSMContext) -> None:
         }
     )
 
-    if ADMIN_CHAT_ID:
-        await message.bot.send_message(
-            ADMIN_CHAT_ID,
-            _admin_card(data, message.from_user.username),
-        )
+    # Сбой отправки уведомления не должен помешать пользователю получить подтверждение.
+    await notify_admin(message.bot, ADMIN_CHAT_ID, _admin_card(data, message.from_user.username))
 
     await message.answer(
         "Заявка принята ✅ Скоро с тобой свяжутся. Спасибо!",

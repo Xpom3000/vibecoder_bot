@@ -1,7 +1,7 @@
-"""Точка входа. Реагирует на /start, показывает проекты, услуги, этапы работы
-и принимает заявку на бриф.
+"""Точка входа. Реагирует на /start, показывает проекты, услуги, этапы работы,
+принимает заявку на бриф и отвечает на свободные вопросы через DeepSeek.
 
-ИИ (DeepSeek) и оплата подключаются позже.
+Оплата подключается позже.
 """
 import asyncio
 import logging
@@ -10,11 +10,14 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
-from handlers import brief, projects, services, stages, start
+from handlers import brief, faq, projects, services, stages, start
+from services.db import init_db
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
+
+    await init_db()
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
@@ -24,6 +27,7 @@ async def main() -> None:
     dp.include_router(services.router)
     dp.include_router(stages.router)
     dp.include_router(brief.router)
+    dp.include_router(faq.router)  # последним: ловит всё, что не разобрали остальные
 
     logging.info("VibeCoder Assistant запущен, ждём /start")
     await dp.start_polling(bot)
