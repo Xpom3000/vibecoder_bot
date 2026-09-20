@@ -90,3 +90,14 @@ def add_to_cart_kb(slug: str) -> InlineKeyboardMarkup:
     """Кнопка под карточкой услуги в витрине (handlers/showcase.py)."""
     buttons = [[InlineKeyboardButton(text="🛒 Добавить в корзину", callback_data=f"cart:add:{slug}")]]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def cart_kb(lines: list) -> InlineKeyboardMarkup:
+    """Клавиатура под сообщением с корзиной: «Убрать» под каждой позицией
+    и «Оформить заказ» общей кнопкой внизу (handlers/cart.py)."""
+    buttons = [
+        [InlineKeyboardButton(text=f"❌ Убрать «{line.title}»", callback_data=f"cart:remove:{line.slug}")]
+        for line in lines
+    ]
+    buttons.append([InlineKeyboardButton(text="✅ Оформить заказ", callback_data="cart:checkout")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
