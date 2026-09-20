@@ -4,6 +4,7 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 from keyboards.inline import main_menu
+from services.history import clear_history
 
 router = Router()
 
@@ -23,6 +24,7 @@ GREETING_DEFAULT = (
 @router.message(CommandStart(deep_link=True))
 async def start_with_param(message: Message, command: CommandObject) -> None:
     """/start с параметром, например t.me/vibecoder_bot?start=landing."""
+    clear_history(message.from_user.id)  # новый разговор — чистый контекст
     payload = command.args
     text = GREETING_LANDING if payload == "landing" else GREETING_DEFAULT
     await message.answer(text, reply_markup=main_menu())
@@ -31,6 +33,7 @@ async def start_with_param(message: Message, command: CommandObject) -> None:
 @router.message(CommandStart())
 async def start_default(message: Message) -> None:
     """Обычный /start без параметров."""
+    clear_history(message.from_user.id)  # новый разговор — чистый контекст
     await message.answer(GREETING_DEFAULT, reply_markup=main_menu())
 
 

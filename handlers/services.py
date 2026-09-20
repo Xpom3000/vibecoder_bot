@@ -15,7 +15,12 @@ def _find_service(slug: str) -> dict | None:
 
 
 def _render_card(service: dict) -> str:
-    return f"<b>{service['title']}</b>\n\n{service['description']}"
+    return (
+        f"<b>{service['title']}</b>\n\n"
+        f"{service['description']}\n\n"
+        f"💰 Цена: {service['price']}\n"
+        f"⏱ Срок: {service['duration']}"
+    )
 
 
 @router.callback_query(F.data == "menu:services")
