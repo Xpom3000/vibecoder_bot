@@ -76,3 +76,9 @@ def brief_cancel_kb() -> InlineKeyboardMarkup:
     """Кнопка отмены заполнения формы брифа."""
     buttons = [[InlineKeyboardButton(text="✖️ Отменить", callback_data="brief:cancel")]]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def add_to_cart_kb(slug: str) -> InlineKeyboardMarkup:
+    """Кнопка под карточкой услуги в витрине (handlers/showcase.py)."""
+    buttons = [[InlineKeyboardButton(text="🛒 Добавить в корзину", callback_data=f"cart:add:{slug}")]]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -1,27 +1,27 @@
-"""Кнопка «Связаться с человеком»: пользователь хочет говорить не с ботом.
+"""«Связаться с человеком»: доступна и из инлайн-карточки, и из постоянного
+меню (keyboards/reply.py) — по нажатию одно и то же поведение.
 
-По нажатию — владельцу приходит уведомление с именем и username
-пользователя, а пользователю бот присылает контакты владельца для связи.
+Владельцу приходит уведомление с именем и username пользователя, а
+пользователю бот присылает контакты владельца для связи.
 """
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message, User
+from typing import Awaitable, Callable
 
 from config import ADMIN_CHAT_ID
 from data.portfolio import CONTACTS
+from keyboards.reply import BTN_CONTACT_HUMAN
 from services.notify import notify_admin
 
 router = Router()
 
 
-@router.callback_query(F.data == "menu:contact_human")
-async def contact_human(callback: CallbackQuery) -> None:
-    await callback.answer()
-
-    user = callback.from_user
+async def _handle_contact_human(bot, user: User, answer: Callable[[str], Awaitable[None]]) -> None:
+    """Общая логика для инлайн-кнопки и кнопки постоянного меню."""
     username = f"@{user.username}" if user.username else "без username"
 
     await notify_admin(
-        callback.bot,
+        bot,
         ADMIN_CHAT_ID,
         "🙋 Пользователь хочет связаться напрямую:\n"
         f"Имя: {user.full_name}\n"
@@ -29,8 +29,19 @@ async def contact_human(callback: CallbackQuery) -> None:
         f"id: {user.id}",
     )
 
-    await callback.message.answer(
+    await answer(
         "Конечно! Вот мои контакты — пишите напрямую:\n\n"
         f"Telegram: {CONTACTS['telegram']}\n"
         f"Email: {CONTACTS['email']}"
     )
+
+
+@router.callback_query(F.data == "menu:contact_human")
+async def contact_human_callback(callback: CallbackQuery) -> None:
+    await callback.answer()
+    await _handle_contact_human(callback.bot, callback.from_user, callback.message.answer)
+
+
+@router.message(F.text == BTN_CONTACT_HUMAN)
+async def contact_human_message(message: Message) -> None:
+    await _handle_contact_human(message.bot, message.from_user, message.answer)

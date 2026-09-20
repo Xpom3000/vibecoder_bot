@@ -4,6 +4,7 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 from keyboards.inline import main_menu
+from keyboards.reply import persistent_menu
 from services.history import clear_history
 
 router = Router()
@@ -20,6 +21,8 @@ GREETING_DEFAULT = (
     "Что интересует?"
 )
 
+MENU_HINT = "Меню всегда под рукой внизу экрана 👇"
+
 
 @router.message(CommandStart(deep_link=True))
 async def start_with_param(message: Message, command: CommandObject) -> None:
@@ -28,6 +31,9 @@ async def start_with_param(message: Message, command: CommandObject) -> None:
     payload = command.args
     text = GREETING_LANDING if payload == "landing" else GREETING_DEFAULT
     await message.answer(text, reply_markup=main_menu())
+    # Reply-клавиатуру нельзя прикрепить к тому же сообщению, что и инлайн-меню —
+    # у Telegram-сообщения только один reply_markup, поэтому отдельным сообщением.
+    await message.answer(MENU_HINT, reply_markup=persistent_menu())
 
 
 @router.message(CommandStart())
@@ -35,6 +41,7 @@ async def start_default(message: Message) -> None:
     """Обычный /start без параметров."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
     await message.answer(GREETING_DEFAULT, reply_markup=main_menu())
+    await message.answer(MENU_HINT, reply_markup=persistent_menu())
 
 
 @router.callback_query(F.data == "menu:back")
