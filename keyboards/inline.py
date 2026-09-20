@@ -35,11 +35,15 @@ def project_card_kb(project: dict) -> InlineKeyboardMarkup:
 
 
 def service_list_kb(services: list[dict]) -> InlineKeyboardMarkup:
-    """Список услуг (Сценарий 3 паспорта)."""
-    buttons = [
-        [InlineKeyboardButton(text=s["title"], callback_data=f"services:card:{s['slug']}")]
-        for s in services
-    ]
+    """Список услуг (Сценарий 3 паспорта). По 2 кнопки в ряд — с расширением
+    ассортимента список стал длиннее, в один столбец было бы неудобно."""
+    buttons = []
+    for i in range(0, len(services), 2):
+        row = [
+            InlineKeyboardButton(text=s["title"], callback_data=f"services:card:{s['slug']}")
+            for s in services[i : i + 2]
+        ]
+        buttons.append(row)
     buttons.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="menu:back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -63,11 +67,15 @@ def stages_kb() -> InlineKeyboardMarkup:
 
 
 def brief_project_type_kb(services: list[dict]) -> InlineKeyboardMarkup:
-    """Кнопки выбора типа проекта на шаге 2 формы брифа."""
-    buttons = [
-        [InlineKeyboardButton(text=s["title"], callback_data=f"brief:type:{s['slug']}")]
-        for s in services
-    ]
+    """Кнопки выбора типа проекта на шаге 2 формы брифа. По 2 в ряд —
+    список услуг расширился, одной колонкой было бы слишком длинно."""
+    buttons = []
+    for i in range(0, len(services), 2):
+        row = [
+            InlineKeyboardButton(text=s["title"], callback_data=f"brief:type:{s['slug']}")
+            for s in services[i : i + 2]
+        ]
+        buttons.append(row)
     buttons.append([InlineKeyboardButton(text="Другое", callback_data="brief:type:other")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
