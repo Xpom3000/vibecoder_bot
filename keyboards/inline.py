@@ -101,3 +101,31 @@ def cart_kb(lines: list) -> InlineKeyboardMarkup:
     ]
     buttons.append([InlineKeyboardButton(text="✅ Оформить заказ", callback_data="cart:checkout")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def order_payment_kb(order_id: int) -> InlineKeyboardMarkup:
+    """Кнопка клиента «Я оплатил(а)» под инструкцией по оплате (handlers/payment.py)."""
+    buttons = [[InlineKeyboardButton(text="✅ Я оплатил(а)", callback_data=f"order:paid:{order_id}")]]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_confirm_payment_kb(order_id: int) -> InlineKeyboardMarkup:
+    """Кнопка владельца «Подтвердить оплату» — приходит только в его личном
+    чате с ботом (handlers/payment.py), больше никто её не увидит."""
+    buttons = [[InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"order:confirm:{order_id}")]]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_advance_stage_kb(order_id: int, current_stage: str) -> InlineKeyboardMarkup:
+    """Кнопка владельца «Следующий этап» — видна только в его личном чате
+    (handlers/tracking.py). Владелец двигает заказ вручную по факту
+    реального прогресса, а не по таймеру."""
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=f"➡️ Следующий этап (сейчас: {current_stage})",
+                callback_data=f"order:advance:{order_id}",
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

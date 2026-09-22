@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 import aiosqlite
 
-from data.portfolio import SERVICES
+from data.portfolio import SERVICES, STAGES
 from services.db import DB_PATH
 
 CREATE_CART_TABLE_SQL = """
@@ -42,11 +42,16 @@ CREATE TABLE IF NOT EXISTS orders (
     items_json TEXT NOT NULL,
     total_text TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'ожидает оплаты',
+    stage TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
 _SERVICES_BY_SLUG = {s["slug"]: s for s in SERVICES}
+
+# Порядок этапов — из той же базы знаний, что показывает "Этапы работы"
+# (data/portfolio.py), чтобы трекинг и справочный showcase не разошлись.
+STAGE_TITLES = [s["title"] for s in STAGES]
 
 
 async def init_cart_tables() -> None:
@@ -55,6 +60,11 @@ async def init_cart_tables() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(CREATE_CART_TABLE_SQL)
         await db.execute(CREATE_ORDERS_TABLE_SQL)
+        try:
+            # Миграция для БД, созданных до появления трекинга этапов.
+            await db.execute("ALTER TABLE orders ADD COLUMN stage TEXT")
+        except Exception:
+            pass  # столбец уже есть
         await db.commit()
 
 
@@ -205,3 +215,68 @@ async def create_order(user_id: int, lines: list[CartLine]) -> int:
 
     await clear_cart(user_id)
     return order_id
+
+
+async def get_order(order_id: int) -> dict | None:
+    """Заказ по id, в виде словаря (колонки таблицы orders как есть)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def set_order_status(order_id: int, status: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE orders SET status = ? WHERE id = ?", (status, order_id))
+        await db.commit()
+
+
+async def _set_stage(order_id: int, stage: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE orders SET stage = ? WHERE id = ?", (stage, order_id))
+        await db.commit()
+
+
+async def set_initial_stage(order_id: int) -> None:
+    """Ставит заказ на первый этап («Бриф») — вызывается сразу после
+    подтверждения оплаты владельцем."""
+    await _set_stage(order_id, STAGE_TITLES[0])
+
+
+async def advance_order_stage(order_id: int) -> str | None:
+    """Переводит заказ на следующий этап. Возвращает новое название этапа
+    или None, если заказ не найден, ещё не запущен (нет stage) или уже на
+    последнем этапе — двигать дальше некуда (граничный случай)."""
+    order = await get_order(order_id)
+    if order is None or not order.get("stage"):
+        return None
+    try:
+        idx = STAGE_TITLES.index(order["stage"])
+    except ValueError:
+        return None
+    if idx >= len(STAGE_TITLES) - 1:
+        return None  # уже на последнем этапе
+
+    next_stage = STAGE_TITLES[idx + 1]
+    await _set_stage(order_id, next_stage)
+    return next_stage
+
+
+async def get_active_order_for_user(user_id: int) -> dict | None:
+    """Последний оплаченный заказ пользователя, который ещё не на финальном
+    этапе («Передача») — то есть работа по нему ещё идёт. Используется в
+    разделе «Этапы работы» для персонального прогресса."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT * FROM orders
+            WHERE telegram_user_id = ? AND status = 'оплачен'
+              AND stage IS NOT NULL AND stage != ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (user_id, STAGE_TITLES[-1]),
+        )
+        row = await cursor.fetchone()
+    return dict(row) if row else None

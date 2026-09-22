@@ -2,7 +2,8 @@
 
 Добавление позиций происходит в handlers/showcase.py (кнопка «Добавить в
 корзину» под карточкой витрины) — здесь только просмотр, изменение и
-оформление того, что туда уже попало.
+оформление того, что туда уже попало. Подтверждение оплаты (кнопки
+«Я оплатил(а)» / «Подтвердить оплату») — в handlers/payment.py.
 
 Граничные случаи, которые обрабатываются явно:
 - Пустая корзина при открытии — вежливое сообщение + подсказка про витрину.
@@ -18,7 +19,8 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
-from keyboards.inline import cart_kb
+from data.portfolio import PAYMENT
+from keyboards.inline import cart_kb, order_payment_kb
 from keyboards.reply import BTN_CART
 from services.cart import CartLine, create_order, format_total, get_cart, remove_item
 
@@ -92,12 +94,15 @@ async def checkout(callback: CallbackQuery) -> None:
         f"✅ Заказ №{order_id} оформлен, статус — «ожидает оплаты».\n\n"
         + "\n".join(rows)
         + f"\n\nИтого: {total}\n\n"
-        "Оплату подключим на следующем этапе — как только это будет готово, "
-        "пришлём ссылку или реквизиты. А пока можно выбрать что-то ещё "
-        "в «🛍 Витрина» для следующего заказа."
+        f"💳 Оплата — {PAYMENT['method']}:\n"
+        f"Телефон: {PAYMENT['phone']}\n"
+        f"Банк: {PAYMENT['bank']}\n"
+        f"Получатель: {PAYMENT['recipient']}\n\n"
+        "Переведи сумму заказа и нажми кнопку ниже — я передам владельцу "
+        "на проверку и он подтвердит оплату вручную."
     )
 
     try:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, reply_markup=order_payment_kb(order_id))
     except TelegramBadRequest:
-        await callback.message.answer(text)
+        await callback.message.answer(text, reply_markup=order_payment_kb(order_id))
