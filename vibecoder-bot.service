@@ -1,0 +1,15 @@
+[Unit]
+Description=VibeCoder Assistant Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/vibecoder_bot
+ExecStart=/root/vibecoder_bot/.venv/bin/python /root/vibecoder_bot/bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
