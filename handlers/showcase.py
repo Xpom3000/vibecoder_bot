@@ -13,6 +13,7 @@ message-хендлер на точный текст кнопки, а не callba
 быть подключён в bot.py раньше handlers/faq.py.
 """
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from data.portfolio import SERVICES
@@ -30,7 +31,8 @@ def _render_card(service: dict) -> str:
 
 
 @router.message(F.text == BTN_SHOWCASE)
-async def show_showcase(message: Message) -> None:
+async def show_showcase(message: Message, state: FSMContext) -> None:
+    await state.clear()
     await message.answer("Вот что я делаю 👇")
     for service in SERVICES:
         await message.answer(_render_card(service), reply_markup=add_to_cart_kb(service["slug"]))

@@ -17,6 +17,7 @@
 """
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from data.portfolio import PAYMENT
@@ -42,7 +43,8 @@ def _render_cart_text(lines: list[CartLine]) -> str:
 
 
 @router.message(F.text == BTN_CART)
-async def show_cart(message: Message) -> None:
+async def show_cart(message: Message, state: FSMContext) -> None:
+    await state.clear()
     lines = await get_cart(message.from_user.id)
     if not lines:
         await message.answer(EMPTY_CART_TEXT)

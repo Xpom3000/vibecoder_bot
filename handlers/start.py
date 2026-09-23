@@ -2,6 +2,7 @@
 from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
 
 from keyboards.inline import main_menu
 from keyboards.reply import persistent_menu
@@ -25,9 +26,10 @@ MENU_HINT = "Меню всегда под рукой внизу экрана �
 
 
 @router.message(CommandStart(deep_link=True))
-async def start_with_param(message: Message, command: CommandObject) -> None:
+async def start_with_param(message: Message, command: CommandObject, state: FSMContext) -> None:
     """/start с параметром, например t.me/vibecoder_bot?start=landing."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
+    await state.finish()
     payload = command.args
     text = GREETING_LANDING if payload == "landing" else GREETING_DEFAULT
     await message.answer(text, reply_markup=main_menu())
@@ -37,15 +39,17 @@ async def start_with_param(message: Message, command: CommandObject) -> None:
 
 
 @router.message(CommandStart())
-async def start_default(message: Message) -> None:
+async def start_default(message: Message, state: FSMContext) -> None:
     """Обычный /start без параметров."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
+    await state.finish()
     await message.answer(GREETING_DEFAULT, reply_markup=main_menu())
     await message.answer(MENU_HINT, reply_markup=persistent_menu())
 
 
 @router.callback_query(F.data == "menu:back")
-async def back_to_menu(callback: CallbackQuery) -> None:
+async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат в главное меню из любого раздела."""
     await callback.answer()
+    await state.clear()
     await callback.message.edit_text(GREETING_DEFAULT, reply_markup=main_menu())

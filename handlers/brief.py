@@ -94,7 +94,7 @@ async def process_task(message: Message, state: FSMContext) -> None:
 async def process_contact(message: Message, state: FSMContext) -> None:
     await state.update_data(contact=message.text)
     data = await state.get_data()
-    await state.clear()
+    await state.finish()
 
     await save_lead(
         {

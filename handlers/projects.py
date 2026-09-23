@@ -1,5 +1,6 @@
 """Сценарий 2 (паспорт бота): каталог проектов и карточки кейсов."""
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from data.portfolio import PROJECTS
@@ -29,23 +30,26 @@ def _render_card(project: dict) -> str:
 
 
 @router.callback_query(F.data == "menu:projects")
-async def show_project_list(callback: CallbackQuery) -> None:
+async def show_project_list(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    await state.clear()
     await callback.message.answer(LIST_TEXT, reply_markup=project_list_kb(PROJECTS))
 
 
 @router.callback_query(F.data == "projects:list")
-async def back_to_list(callback: CallbackQuery) -> None:
+async def back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    await state.clear()
     await callback.message.edit_text(LIST_TEXT, reply_markup=project_list_kb(PROJECTS))
 
 
 @router.callback_query(F.data.startswith("projects:card:"))
-async def show_project_card(callback: CallbackQuery) -> None:
+async def show_project_card(callback: CallbackQuery, state: FSMContext) -> None:
     slug = callback.data.split(":")[-1]
     project = _find_project(slug)
 
     await callback.answer()
+    await state.clear()
 
     if project is None:
         await callback.message.answer("Такой проект не нашёлся 🤔")
