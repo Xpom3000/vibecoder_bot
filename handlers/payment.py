@@ -12,6 +12,9 @@
   не пересоздаёт заявку на проверку, просто напоминает подождать.
 - Повторное «Подтвердить оплату» по уже оплаченному заказу — игнорируется
   с уведомлением "уже подтверждено", статус не трогаем повторно.
+- «Подтвердить оплату» на заказе, который клиент ещё не отмечал оплаченным
+  (статус «ожидает оплаты») — тоже отклоняется: подтвердить можно только
+  то, что клиент уже сам пометил как оплаченное (services.cart.can_confirm_payment).
 - Если ADMIN_CHAT_ID не задан, клиент всё равно получает честный ответ
   (см. также services/notify.py — там уже есть safe-фолбэк с логированием).
 """
@@ -21,7 +24,7 @@ from aiogram.types import CallbackQuery
 
 from config import ADMIN_CHAT_ID
 from keyboards.inline import admin_advance_stage_kb, admin_confirm_payment_kb
-from services.cart import STAGE_TITLES, get_order, set_initial_stage, set_order_status
+from services.cart import STAGE_TITLES, can_confirm_payment, get_order, set_initial_stage, set_order_status
 from services.notify import notify_admin
 
 router = Router()
@@ -79,9 +82,11 @@ async def admin_confirm_payment(callback: CallbackQuery) -> None:
         await callback.answer("Заказ не найден", show_alert=True)
         return
 
-    if order["status"] == STATUS_PAID:
-        # Граничный случай: повторное нажатие «Подтвердить оплату».
-        await callback.answer("Уже подтверждено ранее", show_alert=True)
+    if not can_confirm_payment(order):
+        # Граничный случай: заказ уже оплачен (повторное нажатие) ИЛИ клиент
+        # ещё не отмечал оплату — подтверждать нечего в обоих случаях.
+        msg = "Уже подтверждено ранее" if order["status"] == STATUS_PAID else "Клиент ещё не отметил оплату"
+        await callback.answer(msg, show_alert=True)
         return
 
     await callback.answer("Оплата подтверждена ✅")

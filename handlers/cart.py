@@ -22,7 +22,7 @@ from aiogram.types import CallbackQuery, Message
 from data.portfolio import PAYMENT
 from keyboards.inline import cart_kb, order_payment_kb
 from keyboards.reply import BTN_CART
-from services.cart import CartLine, create_order, format_total, get_cart, remove_item
+from services.cart import CartLine, can_checkout, create_order, format_total, get_cart, remove_item
 
 router = Router()
 
@@ -73,7 +73,7 @@ async def checkout(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
     lines = await get_cart(user_id)
 
-    if not lines:
+    if not can_checkout(lines):
         await callback.answer("Корзина уже пуста", show_alert=True)
         try:
             await callback.message.edit_text(EMPTY_CART_TEXT)
