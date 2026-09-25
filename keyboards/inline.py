@@ -3,13 +3,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def main_menu() -> InlineKeyboardMarkup:
-    """Главное меню: Проекты / Услуги / Этапы работы / Хочу бриф / Связаться с человеком."""
+    """Главное меню: Проекты / Услуги / Этапы работы / Хочу бриф / Поддержка."""
     buttons = [
         [InlineKeyboardButton(text="📁 Проекты", callback_data="menu:projects")],
         [InlineKeyboardButton(text="🛠 Услуги", callback_data="menu:services")],
         [InlineKeyboardButton(text="🗺 Этапы работы", callback_data="menu:stages")],
         [InlineKeyboardButton(text="📝 Хочу бриф", callback_data="menu:brief")],
-        [InlineKeyboardButton(text="🙋 Связаться с человеком", callback_data="menu:contact_human")],
+        [InlineKeyboardButton(text="Поддержка", callback_data="menu:contact_human")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

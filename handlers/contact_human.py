@@ -1,5 +1,5 @@
-"""«Связаться с человеком»: доступна и из инлайн-карточки, и из постоянного
-меню (keyboards/reply.py) — по нажатию одно и то же поведение.
+"""Поддержка: доступна и из инлайн-карточки, и из постоянного меню
+(keyboards/reply.py) — по нажатию одно и то же поведение.
 
 Владельцу приходит уведомление с именем и username пользователя, а
 пользователю бот присылает контакты владельца для связи.
@@ -44,9 +44,6 @@ async def contact_human_callback(callback: CallbackQuery) -> None:
 
 @router.message(lambda message: (message.text or "").strip() in {
     BTN_CONTACT_HUMAN,
-    "Связаться с человеком",
-    "🙋 Связаться с человеком",
-    "🙋\nСвязаться с человеком",
     "Поддержка",
 })
 async def contact_human_message(message: Message) -> None:
