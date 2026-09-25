@@ -13,6 +13,7 @@ from config import ADMIN_CHAT_ID
 from services.notify import notify_admin
 from data.portfolio import SERVICES
 from keyboards.inline import brief_cancel_kb, brief_project_type_kb, main_menu
+from keyboards.reply import BTN_SHOWCASE, BTN_CART, BTN_CONTACT_HUMAN, BTN_STAGES
 from services.db import save_lead
 from states.brief import BriefForm
 
@@ -65,6 +66,15 @@ async def cancel_brief(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(StateFilter(BriefForm.name))
 async def process_name(message: Message, state: FSMContext) -> None:
+    # Ignore presses on persistent reply-menu while expecting a name
+    text = (message.text or "").strip()
+    if text in {BTN_SHOWCASE, BTN_CART, BTN_CONTACT_HUMAN, BTN_STAGES}:
+        await message.answer(
+            "Пожалуйста, введи своё имя (не нажимая кнопки меню).",
+            reply_markup=brief_cancel_kb(),
+        )
+        return
+
     await state.update_data(name=message.text)
     data = await state.get_data()
 
