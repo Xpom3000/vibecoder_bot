@@ -46,4 +46,4 @@ async def show_service_card(callback: CallbackQuery) -> None:
         await callback.message.answer("Такая услуга не нашлась 🤔")
         return
 
-    await callback.message.edit_text(_render_card(service), reply_markup=service_card_kb())
+    await callback.message.edit_text(_render_card(service), reply_markup=service_card_kb(service['slug']))

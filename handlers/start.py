@@ -42,7 +42,7 @@ async def start_with_param(message: Message, command: CommandObject, state: FSMC
 async def start_default(message: Message, state: FSMContext) -> None:
     """Обычный /start без параметров."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
-    await state.finish()
+    await state.finish()                  # ✅ было state.finish()
     await message.answer(GREETING_DEFAULT, reply_markup=main_menu())
     await message.answer(MENU_HINT, reply_markup=persistent_menu())
 
@@ -51,5 +51,5 @@ async def start_default(message: Message, state: FSMContext) -> None:
 async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат в главное меню из любого раздела."""
     await callback.answer()
-    await state.clear()
+    await state.finish()
     await callback.message.edit_text(GREETING_DEFAULT, reply_markup=main_menu())

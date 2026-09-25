@@ -37,9 +37,18 @@ def _admin_card(data: dict, username: str | None) -> str:
     )
 
 
-@router.callback_query(F.data == "menu:brief")
+@router.callback_query(F.data.startswith("menu:brief"))
 async def start_brief(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+
+    # Обрабатываем форму вызова: menu:brief or menu:brief:slug
+    parts = callback.data.split(":")
+    if len(parts) > 2:
+        slug = parts[-1]
+        title = PROJECT_TYPE_TITLES.get(slug)
+        if title:
+            await state.update_data(project_type=title)
+
     await state.set_state(BriefForm.name)
     await callback.message.answer(
         "Начнём 📝 Как к тебе обращаться?",
@@ -57,6 +66,19 @@ async def cancel_brief(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(StateFilter(BriefForm.name))
 async def process_name(message: Message, state: FSMContext) -> None:
     await state.update_data(name=message.text)
+    data = await state.get_data()
+
+    # Если тип проекта уже предзаполнен (например, из карточки услуги),
+    # пропускаем шаг выбора типа и идём сразу к описанию задачи.
+    if data.get("project_type"):
+        await state.set_state(BriefForm.task)
+        await message.answer(
+            "Расскажи в двух-трёх предложениях, какая задача — что должен делать сайт "
+            "и для кого он.",
+            reply_markup=brief_cancel_kb(),
+        )
+        return
+
     await state.set_state(BriefForm.project_type)
     await message.answer(
         "Какой тип проекта интересует?",
