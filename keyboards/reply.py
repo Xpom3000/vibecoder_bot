@@ -14,7 +14,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 BTN_SHOWCASE = "🛍 Витрина"
 BTN_CART = "🛒 Корзина"
-BTN_CONTACT_HUMAN = "🙋 Связаться с человеком"
+BTN_CONTACT_HUMAN = "🙋 Поддержка"
 BTN_STAGES = "🗺 Этапы работы"
 
 
@@ -23,8 +23,10 @@ def persistent_menu() -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text=BTN_SHOWCASE),
             KeyboardButton(text=BTN_CART),
+        ],
+        [
             KeyboardButton(text=BTN_CONTACT_HUMAN),
             KeyboardButton(text=BTN_STAGES),
-        ]
+        ],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
