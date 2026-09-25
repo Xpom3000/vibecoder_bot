@@ -12,13 +12,33 @@ router = Router()
 
 
 async def _finish_state(state: FSMContext) -> None:
-    """Compatibility wrapper: try `finish()`, fall back to `clear()` if needed."""
+    """Compatibility wrapper: try `finish()`, fall back to `clear()` if needed.
+
+    Some tests pass a SimpleNamespace with `finish()` or `clear()`.
+    This helper calls whichever exists; if neither — try `set_state(None)`.
+    """
+    # prefer async finish() if present
     if hasattr(state, "finish"):
-        await state.clear()
-        return
+        maybe = getattr(state, "finish")
+        if callable(maybe):
+            try:
+                await maybe()
+                return
+            except TypeError:
+                # finish might not be awaitable — call synchronously
+                maybe()
+                return
+
     if hasattr(state, "clear"):
-        await state.clear()
-        return
+        maybe = getattr(state, "clear")
+        if callable(maybe):
+            try:
+                await maybe()
+                return
+            except TypeError:
+                maybe()
+                return
+
     try:
         await state.set_state(None)
     except Exception:
