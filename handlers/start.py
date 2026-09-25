@@ -63,7 +63,7 @@ MENU_HINT = "Меню всегда под рукой внизу экрана �
 async def start_with_param(message: Message, command: CommandObject, state: FSMContext) -> None:
     """/start с параметром, например t.me/vibecoder_bot?start=landing."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
-    await state.clear()
+    await _finish_state(state)
     payload = command.args
     text = GREETING_LANDING if payload == "landing" else GREETING_DEFAULT
     await message.answer(text, reply_markup=main_menu())
@@ -76,6 +76,7 @@ async def start_with_param(message: Message, command: CommandObject, state: FSMC
 async def start_default(message: Message, state: FSMContext) -> None:
     """Обычный /start без параметров."""
     clear_history(message.from_user.id)  # новый разговор — чистый контекст
+    await _finish_state(state)
     await message.answer(GREETING_DEFAULT, reply_markup=main_menu())
     await message.answer(MENU_HINT, reply_markup=persistent_menu())
 
@@ -84,5 +85,5 @@ async def start_default(message: Message, state: FSMContext) -> None:
 async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат в главное меню из любого раздела."""
     await callback.answer()
-    await state.clear()
+    await _finish_state(state)
     await callback.message.edit_text(GREETING_DEFAULT, reply_markup=main_menu())
