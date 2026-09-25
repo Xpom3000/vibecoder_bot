@@ -9,7 +9,7 @@ def main_menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🛠 Услуги", callback_data="menu:services")],
         [InlineKeyboardButton(text="🗺 Этапы работы", callback_data="menu:stages")],
         [InlineKeyboardButton(text="📝 Хочу бриф", callback_data="menu:brief")],
-        [InlineKeyboardButton(text="Поддержка", callback_data="menu:contact_human")],
+        [InlineKeyboardButton(text="🙋 Поддержка", callback_data="menu:contact_human")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
