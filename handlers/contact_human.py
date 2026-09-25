@@ -42,6 +42,12 @@ async def contact_human_callback(callback: CallbackQuery) -> None:
     await _handle_contact_human(callback.bot, callback.from_user, callback.message.answer)
 
 
-@router.message(F.text == BTN_CONTACT_HUMAN)
+@router.message(lambda message: (message.text or "").strip() in {
+    BTN_CONTACT_HUMAN,
+    "Связаться с человеком",
+    "🙋 Связаться с человеком",
+    "🙋\nСвязаться с человеком",
+    "Поддержка",
+})
 async def contact_human_message(message: Message) -> None:
     await _handle_contact_human(message.bot, message.from_user, message.answer)
