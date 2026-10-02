@@ -96,6 +96,20 @@ def _mock_session(response_status: int, response_json: dict):
     return mock_session
 
 
+def test_is_configured_rejects_placeholder_credentials(monkeypatch):
+    monkeypatch.setattr(yookassa, "YOOKASSA_SHOP_ID", " 519213 ")
+    monkeypatch.setattr(yookassa, "YOOKASSA_SECRET_KEY", "test_*gBp45DqbmOvWSjV12I4IrxjVJRQ8LfRhjGvQOpOhkYL8")
+
+    assert yookassa.is_configured() is False
+
+
+def test_is_configured_accepts_valid_credentials(monkeypatch):
+    monkeypatch.setattr(yookassa, "YOOKASSA_SHOP_ID", "519213")
+    monkeypatch.setattr(yookassa, "YOOKASSA_SECRET_KEY", "test_gBp45DqbmOvWSjV12I4IrxjVJRQ8LfRhjGvQOpOhkYL8")
+
+    assert yookassa.is_configured() is True
+
+
 @pytest.mark.asyncio
 async def test_create_payment_returns_none_when_not_configured(monkeypatch):
     monkeypatch.setattr(yookassa, "YOOKASSA_SHOP_ID", None)
