@@ -10,6 +10,7 @@ services.cart.get_exact_total()). Для остальных заказов ра�
 верит ни клиенту, ни редиректу браузера.
 """
 import logging
+import re
 import uuid
 
 import aiohttp
@@ -29,7 +30,24 @@ logger = logging.getLogger(__name__)
 
 
 def is_configured() -> bool:
-    return bool(YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY)
+    shop_id = str(YOOKASSA_SHOP_ID or "").strip()
+    secret_key = str(YOOKASSA_SECRET_KEY or "").strip()
+
+    if not shop_id or not secret_key:
+        return False
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", shop_id):
+        logger.warning("YOOKASSA_SHOP_ID выглядит некорректно: %r", YOOKASSA_SHOP_ID)
+        return False
+
+    if not re.fullmatch(r"(?:live|test)[_-][A-Za-z0-9_-]+", secret_key):
+        logger.warning(
+            "YOOKASSA_SECRET_KEY выглядит некорректно: ожидается префикс live_ или test_ "
+            "без спецсимволов вроде '*', пробелов и кавычек."
+        )
+        return False
+
+    return True
 
 
 def is_payment_confirmed(status: str | None) -> bool:
@@ -57,7 +75,7 @@ async def create_payment(amount_rub: int, description: str, return_url: str) -> 
         "description": description,
     }
     headers = {"Idempotence-Key": str(uuid.uuid4())}
-    auth = aiohttp.BasicAuth(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+    auth = aiohttp.BasicAuth(str(YOOKASSA_SHOP_ID).strip(), str(YOOKASSA_SECRET_KEY).strip())
 
     try:
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
@@ -85,7 +103,7 @@ async def get_payment_status(payment_id: str) -> str | None:
     if not is_configured():
         return None
 
-    auth = aiohttp.BasicAuth(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+    auth = aiohttp.BasicAuth(str(YOOKASSA_SHOP_ID).strip(), str(YOOKASSA_SECRET_KEY).strip())
     url = f"{API_URL}/{payment_id}"
 
     try:
