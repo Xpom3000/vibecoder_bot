@@ -36,14 +36,10 @@ def is_configured() -> bool:
     if not shop_id or not secret_key:
         return False
 
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", shop_id):
-        logger.warning("YOOKASSA_SHOP_ID выглядит некорректно: %r", YOOKASSA_SHOP_ID)
-        return False
-
-    if not re.fullmatch(r"(?:live|test)[_-][A-Za-z0-9_-]+", secret_key):
+    # Проверяем только префикс (live_ или test_), остальное оставляем API ЮKassa
+    if not re.fullmatch(r"(?:live|test)[_-].+", secret_key):
         logger.warning(
-            "YOOKASSA_SECRET_KEY выглядит некорректно: ожидается префикс live_ или test_ "
-            "без спецсимволов вроде '*', пробелов и кавычек."
+            "YOOKASSA_SECRET_KEY выглядит некорректно: ожидается префикс live_ или test_"
         )
         return False
 
@@ -93,7 +89,7 @@ async def create_payment(amount_rub: int, description: str, return_url: str) -> 
     try:
         return {"id": data["id"], "confirmation_url": data["confirmation"]["confirmation_url"]}
     except (KeyError, TypeError):
-        logger.error("Неожиданный формат ответа ЮKassa при создании платежа: %s", data)
+        logger.error("Неожиданный формат ответа ЮKassa при создании платежа: %s", e)
         return None
 
 
