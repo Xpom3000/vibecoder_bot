@@ -1,17 +1,17 @@
-from keyboards.reply import BTN_CONTACT_HUMAN, BTN_PROJECTS, BTN_SERVICES, BTN_STAGES, BTN_BRIEF, persistent_menu
+from keyboards.reply import BTN_CART, BTN_CONTACT_HUMAN, BTN_SHOWCASE, BTN_STAGES, persistent_menu
 
 
-def test_client_menu_matches_admin_flow():
+def test_client_menu_has_four_required_buttons():
     markup = persistent_menu()
     labels = [button.text for row in markup.keyboard for button in row]
 
-    assert "📁 Проекты" in labels
-    assert "🛠 Услуги" in labels
-    assert "🗺 Этапы работы" in labels
-    assert "📝 Хочу бриф" in labels
-    assert "🙋 Поддержка" in labels
+    assert labels == [
+        BTN_SHOWCASE,
+        BTN_CART,
+        BTN_CONTACT_HUMAN,
+        BTN_STAGES,
+    ]
+    assert BTN_SHOWCASE == "🛍 Витрина"
+    assert BTN_CART == "� Корзина"
     assert BTN_CONTACT_HUMAN == "🙋 Поддержка"
-    assert BTN_PROJECTS == "📁 Проекты"
-    assert BTN_SERVICES == "🛠 Услуги"
     assert BTN_STAGES == "🗺 Этапы работы"
-    assert BTN_BRIEF == "📝 Хочу бриф"
