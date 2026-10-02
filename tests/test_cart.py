@@ -1,6 +1,7 @@
 """Тесты корзины (services/cart.py): добавление, удаление, подсчёт суммы,
 повторное добавление одной услуги, удаление из пустой корзины.
 """
+from handlers.cart import build_checkout_message
 from services.cart import add_item, format_total, get_cart, remove_item
 
 USER = 1
@@ -104,3 +105,27 @@ async def test_total_excludes_individually_priced_items_but_lists_them(fresh_db)
 
 async def test_empty_cart_total_is_zero(fresh_db):
     assert format_total([]) == "0 ₽"
+
+
+def test_checkout_message_has_no_manual_sbp_text():
+    text, keyboard = build_checkout_message(
+        order_id=42,
+        lines=[{"title": "Лендинг", "price_text": "15 000 ₽", "quantity": 1}],
+        payment={"id": "pay_42", "confirmation_url": "https://example.com/pay"},
+    )
+
+    assert "ЮKassa" in text
+    assert "СБП" not in text
+    assert keyboard is not None
+
+
+def test_checkout_message_without_payment_has_no_sbp_instructions():
+    text, keyboard = build_checkout_message(
+        order_id=42,
+        lines=[{"title": "Лендинг", "price_text": "15 000 ₽", "quantity": 1}],
+        payment=None,
+    )
+
+    assert "СБП" not in text
+    assert "ЮKassa" not in text
+    assert keyboard is None

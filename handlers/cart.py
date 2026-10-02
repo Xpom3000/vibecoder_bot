@@ -15,12 +15,13 @@
 - Повторное редактирование сообщения тем же содержимым (Telegram ругается
   "message is not modified") — перехватываем и просто игнорируем.
 """
+import re
+
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
-from data.portfolio import PAYMENT
-from keyboards.inline import cart_kb, online_payment_kb, order_payment_kb
+from keyboards.inline import cart_kb, online_payment_kb
 from keyboards.reply import BTN_CART
 from services import yookassa
 from services.cart import (
@@ -49,6 +50,64 @@ def _render_cart_text(lines: list[CartLine]) -> str:
         rows.append(f"{i}. {line.title}{qty_suffix} — {line.price_text}")
     total = format_total(lines)
     return "🛒 Ваша корзина:\n\n" + "\n".join(rows) + f"\n\nИтого: {total}"
+
+
+def build_checkout_message(order_id: int, lines: list[CartLine] | list[dict], payment: dict | None) -> tuple[str, object | None]:
+    """Формирует текст чека и клавиатуру после оформления заказа.
+
+    Для всех точных сумм путь только через ЮKassa. Для нечисловых заказов
+    мы не показываем старую схему оплаты по СБП: ветка оплаты должна быть
+    либо онлайн, либо отсутствовать совсем.
+    """
+    normalized: list[CartLine] = []
+    for index, line in enumerate(lines, start=1):
+        if hasattr(line, "title"):
+            normalized.append(line)
+            continue
+
+        title = line["title"]
+        price_text = line["price_text"]
+        quantity = int(line.get("quantity", 1))
+        digits = re.sub(r"[^\d]", "", price_text)
+        line_price = int(digits) * quantity if digits else None
+        is_approx = price_text.strip().lower().startswith("от")
+        normalized.append(
+            CartLine(
+                slug=f"item_{index}",
+                title=title,
+                price_text=price_text,
+                quantity=quantity,
+                line_price=line_price,
+                is_approx=is_approx,
+            )
+        )
+
+    rows = []
+    for i, line in enumerate(normalized, start=1):
+        qty_suffix = f" × {line.quantity}" if line.quantity > 1 else ""
+        rows.append(f"{i}. {line.title}{qty_suffix} — {line.price_text}")
+    total = format_total(normalized)
+    items_block = "\n".join(rows) + f"\n\nИтого: {total}\n\n"
+
+    if payment is not None:
+        text = (
+            f"✅ Заказ №{order_id} оформлен, статус — «ожидает оплаты».\n\n"
+            + items_block
+            + "💳 Оплата через ЮKassa:\n"
+            "Нажми «Оплатить онлайн», заверши оплату и вернись сюда — "
+            "я проверю платёж автоматически."
+        )
+        keyboard = online_payment_kb(order_id, payment["confirmation_url"])
+    else:
+        text = (
+            f"✅ Заказ №{order_id} оформлен, статус — «ожидает оплаты».\n\n"
+            + items_block
+            + "⚠️ Онлайн-оплата для этого заказа пока недоступна.\n"
+            "Напиши владельцу в Telegram, чтобы согласовать детали оплаты."
+        )
+        keyboard = None
+
+    return text, keyboard
 
 
 @router.message(F.text == BTN_CART)
@@ -101,10 +160,9 @@ async def checkout(callback: CallbackQuery) -> None:
     total = format_total(lines)
     items_block = "\n".join(rows) + f"\n\nИтого: {total}\n\n"
 
-    # Если сумма полностью числовая (нет "от N ₽" / "обсуждается
-    # индивидуально") и ЮKassa настроена — предлагаем оплату онлайн.
-    # Иначе честно остаёмся на ручной схеме СБП: автоматически списать
-    # невозможно, когда часть цены ещё не согласована.
+    # Если сумма полностью числовая и ЮKassa настроена — создаём онлайн-платёж.
+    # В ручной СБП-схеме нет необходимости: бот больше не предлагает её как
+    # способ оплаты.
     exact_total = get_exact_total(lines)
     payment = None
     if exact_total is not None and yookassa.is_configured():
@@ -116,26 +174,8 @@ async def checkout(callback: CallbackQuery) -> None:
 
     if payment is not None:
         await set_yookassa_payment_id(order_id, payment["id"])
-        text = (
-            f"✅ Заказ №{order_id} оформлен, статус — «ожидает оплаты».\n\n"
-            + items_block
-            + "💳 Оплата через ЮKassa (тестовый магазин):\n"
-            "Нажми «Оплатить онлайн», заверши оплату и вернись сюда — "
-            "нажми «Я оплатил(а)», и я проверю платёж автоматически."
-        )
-        keyboard = online_payment_kb(order_id, payment["confirmation_url"])
-    else:
-        text = (
-            f"✅ Заказ №{order_id} оформлен, статус — «ожидает оплаты».\n\n"
-            + items_block
-            + f"💳 Оплата — {PAYMENT['method']}:\n"
-            f"Телефон: {PAYMENT['phone']}\n"
-            f"Банк: {PAYMENT['bank']}\n"
-            f"Получатель: {PAYMENT['recipient']}\n\n"
-            "Переведи сумму заказа и нажми кнопку ниже — я передам владельцу "
-            "на проверку и он подтвердит оплату вручную."
-        )
-        keyboard = order_payment_kb(order_id)
+
+    text, keyboard = build_checkout_message(order_id, lines, payment)
 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)

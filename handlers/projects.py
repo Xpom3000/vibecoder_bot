@@ -1,9 +1,10 @@
 """Сценарий 2 (паспорт бота): каталог проектов и карточки кейсов."""
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from data.portfolio import PROJECTS
 from keyboards.inline import project_card_kb, project_list_kb
+from keyboards.reply import BTN_PROJECTS
 
 router = Router()
 
@@ -26,6 +27,11 @@ def _render_card(project: dict) -> str:
         f"✨ Особенности: {features}\n"
         f"📈 Результат: {result}"
     )
+
+
+@router.message(F.text == BTN_PROJECTS)
+async def show_project_list_message(message: Message) -> None:
+    await message.answer(LIST_TEXT, reply_markup=project_list_kb(PROJECTS))
 
 
 @router.callback_query(F.data == "menu:projects")
