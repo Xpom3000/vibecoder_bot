@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS orders (
     total_text TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'ожидает оплаты',
     stage TEXT,
+    yookassa_payment_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -63,6 +64,11 @@ async def init_cart_tables() -> None:
         try:
             # Миграция для БД, созданных до появления трекинга этапов.
             await db.execute("ALTER TABLE orders ADD COLUMN stage TEXT")
+        except Exception:
+            pass  # столбец уже есть
+        try:
+            # Миграция для БД, созданных до появления онлайн-оплаты.
+            await db.execute("ALTER TABLE orders ADD COLUMN yookassa_payment_id TEXT")
         except Exception:
             pass  # столбец уже есть
         await db.commit()
@@ -191,6 +197,21 @@ def format_total(lines: list[CartLine]) -> str:
     return total_str
 
 
+def get_exact_total(lines: list[CartLine]) -> int | None:
+    """Точная сумма в рублях — только если ВСЕ позиции имеют числовую,
+    не приблизительную цену (ни одной "от N ₽", ни одной "обсуждается
+    индивидуально"). Если хоть одна позиция не укладывается в точное число —
+    возвращает None: платёж через ЮKassa по такому заказу создать нельзя
+    честно, остаётся только ручная схема оплаты.
+
+    Чистая функция — без БД и без aiogram, для прямого тестирования."""
+    if not lines:
+        return None
+    if any(line.line_price is None or line.is_approx for line in lines):
+        return None
+    return sum(line.line_price for line in lines)
+
+
 async def create_order(user_id: int, lines: list[CartLine]) -> int:
     """Создаёт заказ (снимок содержимого корзины) со статусом «ожидает
     оплаты» и очищает корзину. Возвращает id заказа."""
@@ -229,6 +250,14 @@ async def get_order(order_id: int) -> dict | None:
 async def set_order_status(order_id: int, status: str) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE orders SET status = ? WHERE id = ?", (status, order_id))
+        await db.commit()
+
+
+async def set_yookassa_payment_id(order_id: int, payment_id: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE orders SET yookassa_payment_id = ? WHERE id = ?", (payment_id, order_id)
+        )
         await db.commit()
 
 

@@ -1,11 +1,15 @@
-"""Подтверждение оплаты (ручная схема, без платёжного провайдера).
+"""Подтверждение оплаты: автоматическое через ЮKassa (если заказ создавался
+с точной числовой суммой) либо ручная схема по СБП для остальных заказов.
 
-Статусы заказа: «ожидает оплаты» → клиент нажал «Я оплатил(а)» →
-«на проверке» → владелец нажал «Подтвердить оплату» → «оплачен».
-
-Кнопка «Подтвердить оплату» приходит владельцу в его личном чате с ботом
-(services.notify.notify_admin отправляет на ADMIN_CHAT_ID) — её видит и
-может нажать только он, больше эта кнопка никому не показывается.
+Статусы заказа:
+- Автоматическая оплата (есть yookassa_payment_id): «ожидает оплаты» →
+  клиент нажал «Я оплатил(а)» → бот САМ проверяет статус в ЮKassa →
+  «оплачен» (только если ЮKassa подтвердила succeeded), иначе статус не
+  меняется и клиенту честно говорят, что оплата ещё не прошла.
+- Ручная схема (нет yookassa_payment_id): «ожидает оплаты» → клиент нажал
+  «Я оплатил(а)» → «на проверке» → владелец нажал «Подтвердить оплату» →
+  «оплачен». Кнопка «Подтвердить оплату» приходит владельцу в его личном
+  чате с ботом — её видит и может нажать только он.
 
 Граничные случаи:
 - Повторное «Я оплатил(а)» по заказу, который уже на проверке/оплачен —
@@ -15,6 +19,8 @@
 - «Подтвердить оплату» на заказе, который клиент ещё не отмечал оплаченным
   (статус «ожидает оплаты») — тоже отклоняется: подтвердить можно только
   то, что клиент уже сам пометил как оплаченное (services.cart.can_confirm_payment).
+- ЮKassa вернула что угодно кроме "succeeded" (pending/canceled/ошибка
+  запроса) — статус заказа НЕ меняется, повторное нажатие безопасно.
 - Если ADMIN_CHAT_ID не задан, клиент всё равно получает честный ответ
   (см. также services/notify.py — там уже есть safe-фолбэк с логированием).
 """
@@ -24,6 +30,7 @@ from aiogram.types import CallbackQuery
 
 from config import ADMIN_CHAT_ID
 from keyboards.inline import admin_advance_stage_kb, admin_confirm_payment_kb
+from services import yookassa
 from services.cart import STAGE_TITLES, can_confirm_payment, get_order, set_initial_stage, set_order_status
 from services.notify import notify_admin
 
@@ -32,6 +39,20 @@ router = Router()
 STATUS_AWAITING = "ожидает оплаты"
 STATUS_REVIEW = "на проверке"
 STATUS_PAID = "оплачен"
+
+
+async def _mark_paid_and_notify(callback: CallbackQuery, order_id: int, order: dict) -> None:
+    """Общий финальный шаг и для автоматического, и для ручного пути:
+    ставим статус «оплачен», первый этап работы и уведомляем клиента."""
+    await set_order_status(order_id, STATUS_PAID)
+    await set_initial_stage(order_id)
+
+    await callback.bot.send_message(
+        order["telegram_user_id"],
+        f"🎉 Оплата заказа №{order_id} подтверждена! Начинаем работу — "
+        f"сейчас на этапе «{STAGE_TITLES[0]}». Прогресс можно посмотреть "
+        "в «🗺 Этапы работы» в меню.",
+    )
 
 
 @router.callback_query(F.data.startswith("order:paid:"))
@@ -52,6 +73,24 @@ async def client_marked_paid(callback: CallbackQuery) -> None:
         )
         return
 
+    payment_id = order.get("yookassa_payment_id")
+
+    if payment_id:
+        # Автоматическая проверка через ЮKassa — статус меняется ТОЛЬКО если
+        # провайдер реально подтвердил оплату, а не потому что клиент нажал кнопку.
+        status = await yookassa.get_payment_status(payment_id)
+
+        if yookassa.is_payment_confirmed(status):
+            await _mark_paid_and_notify(callback, order_id, order)
+            return
+
+        await callback.message.answer(
+            "Пока не вижу подтверждённой оплаты от ЮKassa 🤔\n"
+            "Заверши оплату по ссылке выше и нажми «Я оплатил(а)» ещё раз."
+        )
+        return
+
+    # Ручная схема (СБП) — без прямой проверки у провайдера, подтверждает владелец.
     await set_order_status(order_id, STATUS_REVIEW)
 
     await callback.message.answer(
@@ -90,8 +129,7 @@ async def admin_confirm_payment(callback: CallbackQuery) -> None:
         return
 
     await callback.answer("Оплата подтверждена ✅")
-    await set_order_status(order_id, STATUS_PAID)
-    await set_initial_stage(order_id)
+    await _mark_paid_and_notify(callback, order_id, order)
 
     try:
         await callback.message.edit_text(
@@ -100,10 +138,3 @@ async def admin_confirm_payment(callback: CallbackQuery) -> None:
         )
     except TelegramBadRequest:
         pass
-
-    await callback.bot.send_message(
-        order["telegram_user_id"],
-        f"🎉 Оплата заказа №{order_id} подтверждена! Начинаем работу — "
-        f"сейчас на этапе «{STAGE_TITLES[0]}». Прогресс можно посмотреть "
-        "в «🗺 Этапы работы» в меню.",
-    )
