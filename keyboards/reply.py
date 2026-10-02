@@ -6,15 +6,21 @@
 
 Нажатие такой кнопки в Telegram — это обычное текстовое сообщение с текстом
 кнопки, а не callback_query. Поэтому хендлеры на эти кнопки (handlers/showcase.py,
-handlers/contact_human.py) обязательно должны быть подключены в bot.py
-раньше handlers/faq.py — иначе кнопки перехватит catch-all для свободных
+handlers/cart.py, handlers/projects.py, handlers/services.py, handlers/stages.py,
+handlers/brief.py, handlers/contact_human.py) обязательно должны быть подключены в
+bot.py раньше handlers/faq.py — иначе кнопки перехватит catch-all для свободных
 вопросов к ИИ.
 """
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 BTN_SHOWCASE = "🛍 Витрина"
 BTN_CART = "🛒 Корзина"
-BTN_CONTACT_HUMAN = "🙋 Связаться с человеком"
+BTN_PROJECTS = "📁 Проекты"
+BTN_SERVICES = "🛠 Услуги"
+BTN_STAGES = "🗺 Этапы работы"
+BTN_BRIEF = "📝 Хочу бриф"
+BTN_CONTACT_HUMAN = "🙋 Поддержка"
+BTN_SUPPORT = BTN_CONTACT_HUMAN
 
 
 def persistent_menu() -> ReplyKeyboardMarkup:
@@ -22,7 +28,17 @@ def persistent_menu() -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text=BTN_SHOWCASE),
             KeyboardButton(text=BTN_CART),
+        ],
+        [
+            KeyboardButton(text=BTN_PROJECTS),
+            KeyboardButton(text=BTN_SERVICES),
+        ],
+        [
+            KeyboardButton(text=BTN_STAGES),
+            KeyboardButton(text=BTN_BRIEF),
+        ],
+        [
             KeyboardButton(text=BTN_CONTACT_HUMAN),
-        ]
+        ],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)

@@ -7,10 +7,11 @@
 нет, показываем общий showcase, как и раньше.
 """
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from data.portfolio import STAGES
 from keyboards.inline import stages_kb
+from keyboards.reply import BTN_STAGES
 from services.cart import STAGE_TITLES, get_active_order_for_user
 
 router = Router()
@@ -37,6 +38,18 @@ def _render_stages_for_order(order: dict) -> str:
         lines.append(f"{mark} {i}. <b>{stage['title']}</b> — {stage['description']}")
     lines.append(f"\nСейчас на этапе: <b>{order['stage']}</b>")
     return "\n".join(lines)
+
+
+@router.message(F.text == BTN_STAGES)
+async def show_stages_message(message: Message) -> None:
+    active_order = await get_active_order_for_user(message.from_user.id)
+
+    if active_order is not None:
+        text = _render_stages_for_order(active_order)
+    else:
+        text = _render_stages_generic()
+
+    await message.answer(text, reply_markup=stages_kb())
 
 
 @router.callback_query(F.data == "menu:stages")

@@ -1,9 +1,10 @@
 """Сценарий 3 (паспорт бота): раздел услуг."""
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from data.portfolio import SERVICES
 from keyboards.inline import service_card_kb, service_list_kb
+from keyboards.reply import BTN_SERVICES
 
 router = Router()
 
@@ -21,6 +22,11 @@ def _render_card(service: dict) -> str:
         f"💰 Цена: {service['price']}\n"
         f"⏱ Срок: {service['duration']}"
     )
+
+
+@router.message(F.text == BTN_SERVICES)
+async def show_service_list_message(message: Message) -> None:
+    await message.answer(LIST_TEXT, reply_markup=service_list_kb(SERVICES))
 
 
 @router.callback_query(F.data == "menu:services")

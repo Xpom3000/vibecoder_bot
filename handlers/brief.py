@@ -13,7 +13,7 @@ from config import ADMIN_CHAT_ID
 from services.notify import notify_admin
 from data.portfolio import SERVICES
 from keyboards.inline import brief_cancel_kb, brief_project_type_kb, main_menu
-from keyboards.reply import BTN_CART, BTN_CONTACT_HUMAN, BTN_SHOWCASE
+from keyboards.reply import BTN_BRIEF, BTN_CART, BTN_CONTACT_HUMAN, BTN_SHOWCASE
 from services.db import save_lead
 from states.brief import BriefForm
 
@@ -51,6 +51,15 @@ def _admin_card(data: dict, username: str | None) -> str:
         f"Задача: {data['task']}\n"
         f"Контакт: {contact_line}\n"
         "Источник: bot"
+    )
+
+
+@router.message(F.text == BTN_BRIEF)
+async def start_brief_from_message(message: Message, state: FSMContext) -> None:
+    await state.set_state(BriefForm.name)
+    await message.answer(
+        "Начнём 📝 Как к тебе обращаться?",
+        reply_markup=brief_cancel_kb(),
     )
 
 
