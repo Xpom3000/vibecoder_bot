@@ -13,14 +13,30 @@ from config import ADMIN_CHAT_ID
 from services.notify import notify_admin
 from data.portfolio import SERVICES
 from keyboards.inline import brief_cancel_kb, brief_project_type_kb, main_menu
-from keyboards.reply import BTN_SHOWCASE, BTN_CART, BTN_CONTACT_HUMAN, BTN_STAGES
+from keyboards.reply import BTN_CART, BTN_CONTACT_HUMAN, BTN_SHOWCASE
 from services.db import save_lead
 from states.brief import BriefForm
 
 router = Router()
 
+
+async def _reset_state(state) -> None:
+    """Совместимый сброс состояния для реального FSMContext и моков в тестах."""
+    clear = getattr(state, "clear", None)
+    if callable(clear):
+        await clear()
+        return
+
+    finish = getattr(state, "finish", None)
+    if callable(finish):
+        await finish()
+
+
 PROJECT_TYPE_TITLES = {s["slug"]: s["title"] for s in SERVICES}
 PROJECT_TYPE_TITLES["other"] = "Другое"
+
+_BRIEF_STATES = (BriefForm.name, BriefForm.project_type, BriefForm.task, BriefForm.contact)
+_RESERVED_MENU_TEXTS = {BTN_SHOWCASE, BTN_CART, BTN_CONTACT_HUMAN}
 
 
 def _admin_card(data: dict, username: str | None) -> str:
@@ -38,18 +54,9 @@ def _admin_card(data: dict, username: str | None) -> str:
     )
 
 
-@router.callback_query(F.data.startswith("menu:brief"))
+@router.callback_query(F.data == "menu:brief")
 async def start_brief(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-
-    # Обрабатываем форму вызова: menu:brief or menu:brief:slug
-    parts = callback.data.split(":")
-    if len(parts) > 2:
-        slug = parts[-1]
-        title = PROJECT_TYPE_TITLES.get(slug)
-        if title:
-            await state.update_data(project_type=title)
-
     await state.set_state(BriefForm.name)
     await callback.message.answer(
         "Начнём 📝 Как к тебе обращаться?",
@@ -59,36 +66,41 @@ async def start_brief(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "brief:cancel")
 async def cancel_brief(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await _reset_state(state)
     await callback.answer("Заявка отменена")
     await callback.message.answer("Хорошо, вернёмся в любое время 🙂", reply_markup=main_menu())
 
 
-@router.message(StateFilter(BriefForm.name))
+@router.message(StateFilter(*_BRIEF_STATES), F.text == BTN_SHOWCASE)
+async def leave_brief_for_showcase(message: Message, state: FSMContext) -> None:
+    """Пользователь нажал «Витрина» посреди незавершённой формы брифа —
+    тихо отменяем форму (он не нажимал «Отменить» явно) и сразу показываем
+    то, что он запросил, а не проглатываем нажатие как текстовый ответ."""
+    await _reset_state(state)
+    from handlers.showcase import show_showcase
+
+    await show_showcase(message)
+
+
+@router.message(StateFilter(*_BRIEF_STATES), F.text == BTN_CART)
+async def leave_brief_for_cart(message: Message, state: FSMContext) -> None:
+    await _reset_state(state)
+    from handlers.cart import show_cart
+
+    await show_cart(message)
+
+
+@router.message(StateFilter(*_BRIEF_STATES), F.text == BTN_CONTACT_HUMAN)
+async def leave_brief_for_contact(message: Message, state: FSMContext) -> None:
+    await _reset_state(state)
+    from handlers.contact_human import contact_human_message
+
+    await contact_human_message(message)
+
+
+@router.message(StateFilter(BriefForm.name), ~F.text.in_(_RESERVED_MENU_TEXTS))
 async def process_name(message: Message, state: FSMContext) -> None:
-    # Ignore presses on persistent reply-menu while expecting a name
-    text = (message.text or "").strip()
-    if text in {BTN_SHOWCASE, BTN_CART, BTN_CONTACT_HUMAN, BTN_STAGES}:
-        await message.answer(
-            "Пожалуйста, введи своё имя (не нажимая кнопки меню).",
-            reply_markup=brief_cancel_kb(),
-        )
-        return
-
     await state.update_data(name=message.text)
-    data = await state.get_data()
-
-    # Если тип проекта уже предзаполнен (например, из карточки услуги),
-    # пропускаем шаг выбора типа и идём сразу к описанию задачи.
-    if data.get("project_type"):
-        await state.set_state(BriefForm.task)
-        await message.answer(
-            "Расскажи в двух-трёх предложениях, какая задача — что должен делать сайт "
-            "и для кого он.",
-            reply_markup=brief_cancel_kb(),
-        )
-        return
-
     await state.set_state(BriefForm.project_type)
     await message.answer(
         "Какой тип проекта интересует?",
@@ -112,7 +124,7 @@ async def process_project_type(callback: CallbackQuery, state: FSMContext) -> No
     )
 
 
-@router.message(StateFilter(BriefForm.task))
+@router.message(StateFilter(BriefForm.task), ~F.text.in_(_RESERVED_MENU_TEXTS))
 async def process_task(message: Message, state: FSMContext) -> None:
     await state.update_data(task=message.text)
     await state.set_state(BriefForm.contact)
@@ -122,13 +134,11 @@ async def process_task(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(StateFilter(BriefForm.contact))
+@router.message(StateFilter(BriefForm.contact), ~F.text.in_(_RESERVED_MENU_TEXTS))
 async def process_contact(message: Message, state: FSMContext) -> None:
     await state.update_data(contact=message.text)
     data = await state.get_data()
-    from handlers.start import _finish_state
-
-    await _finish_state(state)
+    await _reset_state(state)
 
     await save_lead(
         {

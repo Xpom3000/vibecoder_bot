@@ -21,6 +21,18 @@ from keyboards.inline import add_to_cart_kb
 from keyboards.reply import BTN_SHOWCASE
 from services.cart import add_item
 
+
+async def _reset_state(state) -> None:
+    """Совместимый сброс состояния для реального FSMContext и моков в тестах."""
+    clear = getattr(state, "clear", None)
+    if callable(clear):
+        await clear()
+        return
+
+    finish = getattr(state, "finish", None)
+    if callable(finish):
+        await finish()
+
 router = Router()
 
 _SERVICES_BY_SLUG = {s["slug"]: s for s in SERVICES}
@@ -31,8 +43,10 @@ def _render_card(service: dict) -> str:
 
 
 @router.message(F.text == BTN_SHOWCASE)
-async def show_showcase(message: Message, state: FSMContext) -> None:
-    await state.clear()
+async def show_showcase(message: Message, state: FSMContext | None = None) -> None:
+    if state is not None:
+        await _reset_state(state)
+
     await message.answer("Вот что я делаю 👇")
     for service in SERVICES:
         await message.answer(_render_card(service), reply_markup=add_to_cart_kb(service["slug"]))
