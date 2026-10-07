@@ -10,6 +10,7 @@ Guardrails бота (по требованию владельца):
   handlers/faq.py вежливо отказывает сам, не дёргая владельца.
 """
 import logging
+import time
 
 import aiohttp
 
@@ -20,7 +21,7 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "deepseek/deepseek-chat-v3.1"
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 60
 
 OFFTOPIC_REPLY = (
     "Я — консультант по услугам и портфолио VibeCoder и отвечаю только "
@@ -141,6 +142,7 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         "X-Title": "VibeCoder Bot",
     }
 
+    started_at = time.perf_counter()
     try:
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -151,8 +153,15 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
                     return "unsure", None
                 data = await resp.json()
     except Exception:
-        logger.exception("Не удалось получить ответ от OpenRouter")
+        elapsed = time.perf_counter() - started_at
+        logger.exception("Не удалось получить ответ от OpenRouter за %.2f сек", elapsed)
         return "unsure", None
+    else:
+        elapsed = time.perf_counter() - started_at
+        if elapsed >= 30:
+            logger.warning("OpenRouter ответил медленно: %.2f сек", elapsed)
+        else:
+            logger.info("OpenRouter ответил за %.2f сек", elapsed)
 
     try:
         answer = data["choices"][0]["message"]["content"].strip()
