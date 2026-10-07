@@ -9,6 +9,7 @@ Guardrails бота (по требованию владельца):
   инструкции / раскрыть системный промпт / сменить роль -> OFFTOPIC_MARKER ->
   handlers/faq.py вежливо отказывает сам, не дёргая владельца.
 """
+import json
 import logging
 import time
 
@@ -73,6 +74,27 @@ def get_openai_model_candidates(preferred_model: str | None = None) -> list[str]
 def get_model_candidates(preferred_model: str | None = None) -> list[str]:
     """Backward-compatible alias used by older tests and helper code."""
     return get_openrouter_model_candidates(preferred_model)
+
+
+def is_insufficient_quota_error(error_payload: object) -> bool:
+    """True, если провайдер ответил, что у аккаунта закончились кредиты/квота."""
+    if not isinstance(error_payload, dict):
+        return False
+
+    error = error_payload.get("error")
+    if not isinstance(error, dict):
+        return False
+
+    error_type = str(error.get("type", "")).lower()
+    code = str(error.get("code", "")).lower()
+    message = str(error.get("message", "")).lower()
+
+    return (
+        "insufficient_quota" in error_type
+        or "credit_balance_exhausted" in code
+        or "no credits remaining" in message
+        or ("quota" in message and "remaining" in message)
+    )
 
 
 def _build_knowledge_base() -> str:
@@ -199,22 +221,35 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
                 timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(api_url, json=payload, headers=headers) as resp:
-                        if resp.status == 403:
-                            body = await resp.text()
-                            last_error = body
+                        raw_body = await resp.text()
+                        parsed_body = None
+                        try:
+                            parsed_body = json.loads(raw_body) if raw_body.strip() else None
+                        except json.JSONDecodeError:
+                            parsed_body = None
+
+                        if resp.status in (403, 429):
+                            last_error = parsed_body or raw_body
+                            if is_insufficient_quota_error(parsed_body):
+                                logger.warning(
+                                    "%s исчерпал квоту/кредиты для модели %s: %s. Пробую следующий вариант.",
+                                    provider_name,
+                                    model_name,
+                                    raw_body,
+                                )
+                                continue
                             logger.warning(
                                 "%s отклонил модель %s: %s. Пробую следующий вариант.",
                                 provider_name,
                                 model_name,
-                                body,
+                                raw_body,
                             )
                             continue
                         if resp.status != 200:
-                            body = await resp.text()
-                            logger.error("%s API error %s for model %s: %s", provider_name, resp.status, model_name, body)
-                            last_error = body
+                            last_error = parsed_body or raw_body
+                            logger.error("%s API error %s for model %s: %s", provider_name, resp.status, model_name, raw_body)
                             continue
-                        data = await resp.json()
+                        data = parsed_body
             except Exception:
                 elapsed = time.perf_counter() - started_at
                 logger.exception("Не удалось получить ответ от %s (model=%s) за %.2f сек", provider_name, model_name, elapsed)
@@ -231,7 +266,13 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
             continue
         break
     else:
-        logger.error("Все доступные AI-провайдеры недоступны. Последняя ошибка: %s", last_error)
+        if is_insufficient_quota_error(last_error):
+            logger.warning(
+                "Все AI-провайдеры недоступны из-за исчерпания квоты/кредитов. "
+                "Безопасно возвращаю fallback для владельца."
+            )
+        else:
+            logger.error("Все доступные AI-провайдеры недоступны. Последняя ошибка: %s", last_error)
         return "unsure", None
 
     try:
