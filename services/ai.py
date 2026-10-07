@@ -20,7 +20,7 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "deepseek/deepseek-chat-v3.1"
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 60
 
 OFFTOPIC_REPLY = (
     "Я — консультант по услугам и портфолио VibeCoder и отвечаю только "
