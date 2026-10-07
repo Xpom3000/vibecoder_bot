@@ -1,4 +1,4 @@
-"""Клиент DeepSeek для ответов на свободные вопросы (раздел FAQ, паспорт бота).
+"""Клиент OpenRouter для ответов на свободные вопросы (раздел FAQ, паспорт бота).
 
 Guardrails бота (по требованию владельца):
 - Бот отвечает ТОЛЬКО на вопросы об услугах и портфолио VibeCoder,
@@ -13,11 +13,11 @@ import logging
 
 import aiohttp
 
-from config import DEEPSEEK_API_KEY
+from config import OPENROUTER_API_KEY
 from data.portfolio import CASE_HIGHLIGHTS, CONTACTS, PROJECTS, SERVICES, STAGES
 
-API_URL = "https://api.deepseek.com/chat/completions"
-MODEL = "deepseek-v4-flash"  # deepseek-chat устарела 24.07.2026, актуальная замена — v4-flash
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = "deepseek/deepseek-chat-v3.1"
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
 REQUEST_TIMEOUT = 20
@@ -119,8 +119,8 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
     Сетевые/технические ошибки трактуются как "unsure" — безопаснее переслать
     владельцу настоящий вопрос клиента, чем молча его потерять.
     """
-    if not DEEPSEEK_API_KEY:
-        logger.warning("DEEPSEEK_API_KEY не задан — свободные вопросы не обрабатываются.")
+    if not OPENROUTER_API_KEY:
+        logger.warning("OPENROUTER_API_KEY не задан — свободные вопросы не обрабатываются.")
         return "unsure", None
 
     messages = [{"role": "system", "content": _system_prompt()}]
@@ -135,8 +135,10 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         "max_tokens": 500,
     }
     headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://localhost",
+        "X-Title": "VibeCoder Bot",
     }
 
     try:
@@ -145,17 +147,17 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
             async with session.post(API_URL, json=payload, headers=headers) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    logger.error("DeepSeek API error %s: %s", resp.status, body)
+                    logger.error("OpenRouter API error %s: %s", resp.status, body)
                     return "unsure", None
                 data = await resp.json()
     except Exception:
-        logger.exception("Не удалось получить ответ от DeepSeek")
+        logger.exception("Не удалось получить ответ от OpenRouter")
         return "unsure", None
 
     try:
         answer = data["choices"][0]["message"]["content"].strip()
     except (KeyError, IndexError, TypeError):
-        logger.error("Неожиданный формат ответа DeepSeek: %s", data)
+        logger.error("Неожиданный формат ответа OpenRouter: %s", data)
         return "unsure", None
 
     if not answer:

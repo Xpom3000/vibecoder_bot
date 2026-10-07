@@ -12,6 +12,6 @@ def test_client_menu_has_four_required_buttons():
         BTN_STAGES,
     ]
     assert BTN_SHOWCASE == "🛍 Витрина"
-    assert BTN_CART == "� Корзина"
+    assert BTN_CART == "🛒 Корзина"
     assert BTN_CONTACT_HUMAN == "🙋 Поддержка"
     assert BTN_STAGES == "🗺 Этапы работы"

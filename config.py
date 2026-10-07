@@ -13,7 +13,8 @@ def _env(name: str) -> str:
 
 
 BOT_TOKEN = _env("BOT_TOKEN")
-DEEPSEEK_API_KEY = _env("DEEPSEEK_API_KEY")   # для свободных вопросов (DeepSeek)
+OPENROUTER_API_KEY = _env("OPENROUTER_API_KEY") or _env("DEEPSEEK_API_KEY")
+DEEPSEEK_API_KEY = OPENROUTER_API_KEY  # совместимость со старым .env / кодом
 ADMIN_CHAT_ID = _env("ADMIN_CHAT_ID")
 DATABASE_URL = _env("DATABASE_URL")           # зарезервировано, сейчас используется SQLite
 
