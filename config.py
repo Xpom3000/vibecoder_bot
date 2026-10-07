@@ -13,8 +13,10 @@ def _env(name: str) -> str:
 
 
 BOT_TOKEN = _env("BOT_TOKEN")
+OPENAI_API_KEY = _env("OPENAI_API_KEY")
 OPENROUTER_API_KEY = _env("OPENROUTER_API_KEY") or _env("DEEPSEEK_API_KEY")
 OPENROUTER_MODEL = _env("OPENROUTER_MODEL") or "openai/gpt-4o-mini"
+OPENAI_MODEL = _env("OPENAI_MODEL") or "gpt-4o-mini"
 DEEPSEEK_API_KEY = OPENROUTER_API_KEY  # совместимость со старым .env / кодом
 ADMIN_CHAT_ID = _env("ADMIN_CHAT_ID")
 DATABASE_URL = _env("DATABASE_URL")           # зарезервировано, сейчас используется SQLite

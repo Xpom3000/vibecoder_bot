@@ -14,11 +14,11 @@ import time
 
 import aiohttp
 
-from config import OPENROUTER_API_KEY, OPENROUTER_MODEL
+from config import OPENAI_API_KEY, OPENAI_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL
 from data.portfolio import CASE_HIGHLIGHTS, CONTACTS, PROJECTS, SERVICES, STAGES
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = OPENROUTER_MODEL
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
 REQUEST_TIMEOUT = 60
@@ -37,11 +37,14 @@ DEFAULT_OPENROUTER_FALLBACK_MODELS = [
     "meta-llama/llama-3.1-8b-instruct",
 ]
 
+DEFAULT_OPENAI_FALLBACK_MODELS = [
+    "gpt-4o-mini",
+    "gpt-4.1-mini",
+    "gpt-4o",
+]
 
-def get_model_candidates(preferred_model: str | None = None) -> list[str]:
-    """Возвращает список моделей по приоритету: первая — выбранная пользователем,
-    затем безопасные модели OpenRouter, которые чаще всего доступны.
-    """
+
+def get_openrouter_model_candidates(preferred_model: str | None = None) -> list[str]:
     candidates: list[str] = []
     preferred = (preferred_model or OPENROUTER_MODEL or "").strip()
     if preferred:
@@ -52,6 +55,24 @@ def get_model_candidates(preferred_model: str | None = None) -> list[str]:
             candidates.append(model)
 
     return candidates
+
+
+def get_openai_model_candidates(preferred_model: str | None = None) -> list[str]:
+    candidates: list[str] = []
+    preferred = (preferred_model or OPENAI_MODEL or "").strip()
+    if preferred:
+        candidates.append(preferred)
+
+    for model in DEFAULT_OPENAI_FALLBACK_MODELS:
+        if model not in candidates:
+            candidates.append(model)
+
+    return candidates
+
+
+def get_model_candidates(preferred_model: str | None = None) -> list[str]:
+    """Backward-compatible alias used by older tests and helper code."""
+    return get_openrouter_model_candidates(preferred_model)
 
 
 def _build_knowledge_base() -> str:
@@ -142,65 +163,75 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
     Сетевые/технические ошибки трактуются как "unsure" — безопаснее переслать
     владельцу настоящий вопрос клиента, чем молча его потерять.
     """
-    if not OPENROUTER_API_KEY:
-        logger.warning("OPENROUTER_API_KEY не задан — свободные вопросы не обрабатываются.")
-        return "unsure", None
-
     messages = [{"role": "system", "content": _system_prompt()}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://localhost",
-        "X-Title": "VibeCoder Bot",
-    }
+    providers = []
+    if OPENROUTER_API_KEY:
+        providers.append(("OpenRouter", OPENROUTER_API_URL, OPENROUTER_API_KEY, get_openrouter_model_candidates(OPENROUTER_MODEL), {"HTTP-Referer": "https://localhost", "X-Title": "VibeCoder Bot"}))
+    if OPENAI_API_KEY:
+        providers.append(("OpenAI", OPENAI_API_URL, OPENAI_API_KEY, get_openai_model_candidates(OPENAI_MODEL), {}))
+
+    if not providers:
+        logger.warning("API-ключи OpenRouter/OpenAI не заданы — свободные вопросы не обрабатываются.")
+        return "unsure", None
 
     last_error = None
-    for model_name in get_model_candidates(MODEL):
-        payload = {
-            "model": model_name,
-            "messages": messages,
-            "temperature": 0.3,
-            "max_tokens": 500,
-        }
+    for provider_name, api_url, api_key, model_candidates, extra_headers in providers:
+        logger.info("Пробую %s ...", provider_name)
+        for model_name in model_candidates:
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.3,
+                "max_tokens": 500,
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            headers.update(extra_headers)
 
-        started_at = time.perf_counter()
-        try:
-            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(API_URL, json=payload, headers=headers) as resp:
-                    if resp.status == 403:
-                        body = await resp.text()
-                        last_error = body
-                        logger.warning(
-                            "OpenRouter отклонил модель %s: %s. Пробую следующий вариант.",
-                            model_name,
-                            body,
-                        )
-                        continue
-                    if resp.status != 200:
-                        body = await resp.text()
-                        logger.error("OpenRouter API error %s for model %s: %s", resp.status, model_name, body)
-                        last_error = body
-                        continue
-                    data = await resp.json()
-        except Exception:
-            elapsed = time.perf_counter() - started_at
-            logger.exception("Не удалось получить ответ от OpenRouter (model=%s) за %.2f сек", model_name, elapsed)
-            last_error = "network_error"
-            continue
-        else:
-            elapsed = time.perf_counter() - started_at
-            if elapsed >= 30:
-                logger.warning("OpenRouter ответил медленно для %s: %.2f сек", model_name, elapsed)
+            started_at = time.perf_counter()
+            try:
+                timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(api_url, json=payload, headers=headers) as resp:
+                        if resp.status == 403:
+                            body = await resp.text()
+                            last_error = body
+                            logger.warning(
+                                "%s отклонил модель %s: %s. Пробую следующий вариант.",
+                                provider_name,
+                                model_name,
+                                body,
+                            )
+                            continue
+                        if resp.status != 200:
+                            body = await resp.text()
+                            logger.error("%s API error %s for model %s: %s", provider_name, resp.status, model_name, body)
+                            last_error = body
+                            continue
+                        data = await resp.json()
+            except Exception:
+                elapsed = time.perf_counter() - started_at
+                logger.exception("Не удалось получить ответ от %s (model=%s) за %.2f сек", provider_name, model_name, elapsed)
+                last_error = "network_error"
+                continue
             else:
-                logger.info("OpenRouter ответил за %.2f сек для %s", elapsed, model_name)
-            break
+                elapsed = time.perf_counter() - started_at
+                if elapsed >= 30:
+                    logger.warning("%s ответил медленно для %s: %.2f сек", provider_name, model_name, elapsed)
+                else:
+                    logger.info("%s ответил за %.2f сек для %s", provider_name, elapsed, model_name)
+                break
+        else:
+            continue
+        break
     else:
-        logger.error("Все модели OpenRouter недоступны. Последняя ошибка: %s", last_error)
+        logger.error("Все доступные AI-провайдеры недоступны. Последняя ошибка: %s", last_error)
         return "unsure", None
 
     try:
