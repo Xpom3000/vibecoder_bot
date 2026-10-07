@@ -1,10 +1,11 @@
 """Конфигурация: всё читается из переменных окружения, ничего в коде."""
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def _env(name: str) -> str:

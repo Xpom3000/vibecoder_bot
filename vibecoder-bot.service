@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/root/vibecoder_bot
+EnvironmentFile=/root/vibecoder_bot/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/root/vibecoder_bot/.venv/bin/python /root/vibecoder_bot/bot.py
 Restart=always
 RestartSec=5
