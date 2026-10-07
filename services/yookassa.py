@@ -36,10 +36,18 @@ def is_configured() -> bool:
     if not shop_id or not secret_key:
         return False
 
-    # Проверяем только префикс (live_ или test_), остальное оставляем API ЮKassa
-    if not re.fullmatch(r"(?:live|test)[_-].+", secret_key):
+    if any(marker in secret_key.lower() for marker in ("*", "example", "placeholder", "changeme", "replace_me", "your_")):
         logger.warning(
-            "YOOKASSA_SECRET_KEY выглядит некорректно: ожидается префикс live_ или test_"
+            "YOOKASSA_SECRET_KEY выглядит как placeholder: запрещённый маркер найден"
+        )
+        return False
+
+    # Принято поддерживать оба формата: live_... / live-... и test_... / test-...
+    # В реальных ключах ЮKassa применяется в основном префикс "live_" или "test_",
+    # но тесты проекта также используют форму "test-secret".
+    if not re.fullmatch(r"(?:live|test)[_-][A-Za-z0-9][A-Za-z0-9_-]*", secret_key):
+        logger.warning(
+            "YOOKASSA_SECRET_KEY выглядит некорректно: ожидается префикс live_ / live- / test_ / test-"
         )
         return False
 
@@ -88,7 +96,7 @@ async def create_payment(amount_rub: int, description: str, return_url: str) -> 
 
     try:
         return {"id": data["id"], "confirmation_url": data["confirmation"]["confirmation_url"]}
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as e:
         logger.error("Неожиданный формат ответа ЮKassa при создании платежа: %s", e)
         return None
 
