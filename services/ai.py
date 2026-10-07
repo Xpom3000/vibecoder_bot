@@ -14,11 +14,11 @@ import time
 
 import aiohttp
 
-from config import OPENROUTER_API_KEY
+from config import OPENROUTER_API_KEY, OPENROUTER_MODEL
 from data.portfolio import CASE_HIGHLIGHTS, CONTACTS, PROJECTS, SERVICES, STAGES
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "deepseek/deepseek-chat-v3.1"
+MODEL = OPENROUTER_MODEL
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
 REQUEST_TIMEOUT = 60
@@ -30,6 +30,28 @@ OFFTOPIC_REPLY = (
 )
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_OPENROUTER_FALLBACK_MODELS = [
+    "openai/gpt-4o-mini",
+    "google/gemini-2.0-flash-001",
+    "meta-llama/llama-3.1-8b-instruct",
+]
+
+
+def get_model_candidates(preferred_model: str | None = None) -> list[str]:
+    """Возвращает список моделей по приоритету: первая — выбранная пользователем,
+    затем безопасные модели OpenRouter, которые чаще всего доступны.
+    """
+    candidates: list[str] = []
+    preferred = (preferred_model or OPENROUTER_MODEL or "").strip()
+    if preferred:
+        candidates.append(preferred)
+
+    for model in DEFAULT_OPENROUTER_FALLBACK_MODELS:
+        if model not in candidates:
+            candidates.append(model)
+
+    return candidates
 
 
 def _build_knowledge_base() -> str:
@@ -129,12 +151,6 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
-    payload = {
-        "model": MODEL,
-        "messages": messages,
-        "temperature": 0.3,
-        "max_tokens": 500,
-    }
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -142,26 +158,50 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         "X-Title": "VibeCoder Bot",
     }
 
-    started_at = time.perf_counter()
-    try:
-        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(API_URL, json=payload, headers=headers) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    logger.error("OpenRouter API error %s: %s", resp.status, body)
-                    return "unsure", None
-                data = await resp.json()
-    except Exception:
-        elapsed = time.perf_counter() - started_at
-        logger.exception("Не удалось получить ответ от OpenRouter за %.2f сек", elapsed)
-        return "unsure", None
-    else:
-        elapsed = time.perf_counter() - started_at
-        if elapsed >= 30:
-            logger.warning("OpenRouter ответил медленно: %.2f сек", elapsed)
+    last_error = None
+    for model_name in get_model_candidates(MODEL):
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 500,
+        }
+
+        started_at = time.perf_counter()
+        try:
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(API_URL, json=payload, headers=headers) as resp:
+                    if resp.status == 403:
+                        body = await resp.text()
+                        last_error = body
+                        logger.warning(
+                            "OpenRouter отклонил модель %s: %s. Пробую следующий вариант.",
+                            model_name,
+                            body,
+                        )
+                        continue
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error("OpenRouter API error %s for model %s: %s", resp.status, model_name, body)
+                        last_error = body
+                        continue
+                    data = await resp.json()
+        except Exception:
+            elapsed = time.perf_counter() - started_at
+            logger.exception("Не удалось получить ответ от OpenRouter (model=%s) за %.2f сек", model_name, elapsed)
+            last_error = "network_error"
+            continue
         else:
-            logger.info("OpenRouter ответил за %.2f сек", elapsed)
+            elapsed = time.perf_counter() - started_at
+            if elapsed >= 30:
+                logger.warning("OpenRouter ответил медленно для %s: %.2f сек", model_name, elapsed)
+            else:
+                logger.info("OpenRouter ответил за %.2f сек для %s", elapsed, model_name)
+            break
+    else:
+        logger.error("Все модели OpenRouter недоступны. Последняя ошибка: %s", last_error)
+        return "unsure", None
 
     try:
         answer = data["choices"][0]["message"]["content"].strip()
