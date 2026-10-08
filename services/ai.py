@@ -13,12 +13,7 @@ import json
 import logging
 import time
 
-import aiohttp
-
-try:
-    from curl_cffi.requests import AsyncSession
-except ImportError:  # pragma: no cover - optional dependency; fallback below
-    AsyncSession = None
+from curl_cffi.requests import AsyncSession
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL
 from data.portfolio import CASE_HIGHLIGHTS, CONTACTS, PROJECTS, SERVICES, STAGES
@@ -224,52 +219,43 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
 
             started_at = time.perf_counter()
             try:
-                if AsyncSession is not None:
-                    async with AsyncSession() as session:
-                        resp = await session.post(
-                            api_url,
-                            json=payload,
-                            headers=headers,
-                            impersonate="chrome120",
-                            timeout=REQUEST_TIMEOUT,
-                        )
-                        raw_body = resp.text
-                        status_code = resp.status_code
-                else:
-                    timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.post(api_url, json=payload, headers=headers) as resp:
-                            raw_body = await resp.text()
-                            status_code = resp.status
-
-                parsed_body = None
-                try:
-                    parsed_body = json.loads(raw_body) if raw_body.strip() else None
-                except json.JSONDecodeError:
+                async with AsyncSession() as session:
+                    resp = await session.post(
+                        api_url,
+                        json=payload,
+                        headers=headers,
+                        impersonate="chrome131",
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    raw_body = resp.text
                     parsed_body = None
+                    try:
+                        parsed_body = json.loads(raw_body) if raw_body.strip() else None
+                    except json.JSONDecodeError:
+                        parsed_body = None
 
-                if status_code in (403, 429):
-                    last_error = parsed_body or raw_body
-                    if is_insufficient_quota_error(parsed_body):
+                    if resp.status_code in (403, 429):
+                        last_error = parsed_body or raw_body
+                        if is_insufficient_quota_error(parsed_body):
+                            logger.warning(
+                                "%s исчерпал квоту/кредиты для модели %s: %s. Пробую следующий вариант.",
+                                provider_name,
+                                model_name,
+                                raw_body,
+                            )
+                            continue
                         logger.warning(
-                            "%s исчерпал квоту/кредиты для модели %s: %s. Пробую следующий вариант.",
+                            "%s отклонил модель %s: %s. Пробую следующий вариант.",
                             provider_name,
                             model_name,
                             raw_body,
                         )
                         continue
-                    logger.warning(
-                        "%s отклонил модель %s: %s. Пробую следующий вариант.",
-                        provider_name,
-                        model_name,
-                        raw_body,
-                    )
-                    continue
-                if status_code != 200:
-                    last_error = parsed_body or raw_body
-                    logger.error("%s API error %s for model %s: %s", provider_name, status_code, model_name, raw_body)
-                    continue
-                data = parsed_body
+                    if resp.status_code != 200:
+                        last_error = parsed_body or raw_body
+                        logger.error("%s API error %s for model %s: %s", provider_name, resp.status_code, model_name, raw_body)
+                        continue
+                    data = parsed_body
             except Exception:
                 elapsed = time.perf_counter() - started_at
                 logger.exception("Не удалось получить ответ от %s (model=%s) за %.2f сек", provider_name, model_name, elapsed)
