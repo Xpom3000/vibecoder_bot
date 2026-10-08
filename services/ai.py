@@ -213,8 +213,9 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-            }
-            headers.update(extra_headers)
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+           }
+            headers.update(extra_headers)   
 
             started_at = time.perf_counter()
             try:
