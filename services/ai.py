@@ -18,7 +18,7 @@ import aiohttp
 from config import AIRFAIL_API_KEY
 from data.portfolio import CASE_HIGHLIGHTS, CONTACTS, PROJECTS, SERVICES, STAGES
 
-AIRFAIL_API_URL = "https://api.air.fail/public/text/chatgpt_5"
+AIRFAIL_API_URL = "https://api.air.fail/public/text/dola_seed"
 UNSURE_MARKER = "UNSURE"
 OFFTOPIC_MARKER = "OFFTOPIC"
 REQUEST_TIMEOUT = 120
@@ -151,12 +151,12 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         "Authorization": AIRFAIL_API_KEY,  # air.fail ждёт ключ без "Bearer"
     }
     form_data = {
-        "content": dialog_text,
-        "info": json.dumps({
-            "version": "deepseek/deepseek-v4-flash-0731",  # быстрая модель DeepSeek
-            "temperature": 0.3,
-        }),
-    }
+    "content": dialog_text,
+    "info": json.dumps({
+        "version": "seed-2-1-turbo",  # Turbo-версия Dola Seed
+        "temperature": 0.3,
+    }),
+}
 
     started_at = time.perf_counter()
     try:
