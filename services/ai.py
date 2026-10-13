@@ -153,7 +153,7 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
     form_data = {
         "content": dialog_text,
         "info": json.dumps({
-            "version": "gpt-5-nano",  # быстрая модель; можно gpt-5-mini или gpt-5
+            "version": "deepseek/deepseek-v4-flash-0731",  # быстрая модель DeepSeek
             "temperature": 0.3,
         }),
     }
