@@ -9,6 +9,7 @@ Guardrails бота (по требованию владельца):
   инструкции / раскрыть системный промпт / сменить роль -> OFFTOPIC_MARKER ->
   handlers/faq.py вежливо отказывает сам, не дёргая владельца.
 """
+
 import json
 import logging
 import time
@@ -121,7 +122,9 @@ def _build_dialog_text(messages: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-async def ask(question: str, history: list[dict] | None = None) -> tuple[str, str | None]:
+async def ask(
+    question: str, history: list[dict] | None = None
+) -> tuple[str, str | None]:
     """Отправляет вопрос в air.fail и возвращает (kind, text).
 
     history — предыдущие реплики диалога с этим пользователем (список
@@ -137,7 +140,9 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
     владельцу настоящий вопрос клиента, чем молча его потерять.
     """
     if not AIRFAIL_API_KEY:
-        logger.warning("API-ключ air.fail не задан — свободные вопросы не обрабатываются.")
+        logger.warning(
+            "API-ключ air.fail не задан — свободные вопросы не обрабатываются."
+        )
         return "unsure", None
 
     messages = [{"role": "system", "content": _system_prompt()}]
@@ -151,19 +156,27 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
         "Authorization": AIRFAIL_API_KEY,  # air.fail ждёт ключ без "Bearer"
     }
     form_data = {
-    "content": dialog_text,
-    "info": json.dumps({
-        "version": "seed-2-1-turbo",  # Turbo-версия Dola Seed
-        "temperature": 0.3,
-    }),
-}
+        "content": dialog_text,
+        "info": json.dumps(
+            {
+                "version": "seed-2-1-turbo",  # Turbo-версия Dola Seed
+                "temperature": 0.3,
+            }
+        ),
+    }
 
     started_at = time.perf_counter()
     try:
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-        connector = aiohttp.TCPConnector(ssl=False)  # обход просроченного сертификата air.fail
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            async with session.post(AIRFAIL_API_URL, data=form_data, headers=headers) as resp:
+        connector = aiohttp.TCPConnector(
+            ssl=False
+        )  # обход просроченного сертификата air.fail
+        async with aiohttp.ClientSession(
+            timeout=timeout, connector=connector
+        ) as session:
+            async with session.post(
+                AIRFAIL_API_URL, data=form_data, headers=headers
+            ) as resp:
                 raw_body = await resp.text()
                 parsed_body = None
                 try:
@@ -171,6 +184,14 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
                 except json.JSONDecodeError:
                     parsed_body = None
 
+                if resp.status == 402:
+                    logger.error(
+                        "air.fail: закончились токены на балансе. %s", raw_body
+                    )
+                    return "offtopic", (
+                        "Извините, сервис временно недоступен из-за технических "
+                        "ограничений. Попробуйте позже или свяжитесь с нами напрямую."
+                    )
                 if resp.status not in (200, 201):
                     logger.error("air.fail API error %s: %s", resp.status, raw_body)
                     return "unsure", None
