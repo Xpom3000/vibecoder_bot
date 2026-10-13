@@ -161,7 +161,8 @@ async def ask(question: str, history: list[dict] | None = None) -> tuple[str, st
     started_at = time.perf_counter()
     try:
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        connector = aiohttp.TCPConnector(ssl=False)  # обход просроченного сертификата air.fail
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             async with session.post(AIRFAIL_API_URL, data=form_data, headers=headers) as resp:
                 raw_body = await resp.text()
                 parsed_body = None
